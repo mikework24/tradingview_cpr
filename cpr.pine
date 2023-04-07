@@ -1,0 +1,300 @@
+//@version=4
+study("[MF] CURRENT AND NEXT CPR LEVELS", shorttitle="[MF] Cu&NeCPR", overlay=true)
+
+//CPR
+cpr_timeframe  = input("M",   title="Timeframe", options=["D", "W", "M"], group="CPR")
+CPRlinewidth   = input(2,     title="Linewidth", options=[1, 2, 3], group="CPR")
+showPDHL       = input(true,  title="Show previous High & Low", type=input.bool, group="CPR")
+sLabels        = input(true,  title="Show Labels", type = input.bool, group="CPR")
+
+// CPR Colors
+color rColor   = input(title="", defval=color.new(color.green,20), type=input.color, group="Colors", inline="Colors")
+color cprColor = input(title="", defval=color.new(color.blue, 20), type=input.color, group="Colors", inline="Colors")
+color sColor   = input(title="", defval=color.new(color.red,  20), type=input.color, group="Colors", inline="Colors")
+
+//Mid Lines
+sMidLines      = input(true, title="Show Mid Lines", type = input.bool, group="Mid Lines")
+Midlinewidth   = input(1,     title="Linewidth", options=[1, 2, 3], group="Mid Lines")
+color rColorM  = input(title="", defval=color.new(color.green,60), type=input.color, group="Mid Lines", inline="Colors2")
+color sColorM  = input(title="", defval=color.new(color.red,  60), type=input.color, group="Mid Lines", inline="Colors2")
+
+
+
+//Fill Transparency
+fTransp = 92 
+
+
+//negative filter to hide errors
+hide_neg(number) => number<=0?0:number
+
+
+////////////////////////////////////////////
+//      complete current draw cycle       //
+////////////////////////////////////////////
+time_y = year(time)
+time_m = month(time)
+time_d = dayofmonth(time)
+
+if(time_m == 12)
+    time_y := time_y + 1
+    time_m := 1
+else
+    time_m := time_m + 1
+next_month = timestamp(time_y, time_m, 1, 0, 0)
+
+var tom_start = 0
+var tom_end = 0
+
+if(cpr_timeframe == "M")
+    tom_start := next_month
+    tom_end := tom_start + (60000 * 60 * 24 * 30)
+
+if(cpr_timeframe == "W")
+    if(time(timeframe.period, "0000-1200:2") and not time(timeframe.period, "0000-1200:2")[1])
+        tom_start := time + (1000 * 60 * 60 * 24 * 7)
+        tom_end := tom_start + (1000 * 60 * 60 * 24 * 7)
+
+if(cpr_timeframe == "D")
+    if(time(timeframe.period, "0000-1200:1234567") and not time(timeframe.period, "0000-1200:1234567")[1])
+        tom_start := time + (1000 * 60 * 60 * 24)
+        tom_end := tom_start + (1000 * 60 * 60 * 24)
+
+
+//////////////////////////////////////
+//      Calculate Today's CPR       //
+//////////////////////////////////////
+Hm = security(syminfo.tickerid, cpr_timeframe, high[1],barmerge.gaps_off, barmerge.lookahead_on)
+Cm = security(syminfo.tickerid, cpr_timeframe, close[1],barmerge.gaps_off, barmerge.lookahead_on)
+Lm = security(syminfo.tickerid, cpr_timeframe, low[1],barmerge.gaps_off, barmerge.lookahead_on)
+
+// Pivot Range
+Pm = (Hm + Lm + Cm) / 3 
+BCm = (Hm + Lm)/2
+TCm = (Pm - BCm) + Pm
+
+// Resistance Levels
+R3m = Hm + 2*(Pm - Lm)
+R2m = Pm + (Hm - Lm)
+R1m = (Pm * 2) - Lm
+
+// Support Levels
+S1m = (Pm * 2) - Hm
+S2m = Pm - (Hm - Lm)
+S3m = Lm - 2*(Hm - Pm)
+
+
+// Resistance Mid Levels
+R23m = (R2m + R3m) / 2
+R12m = (R1m + R2m) / 2
+RP1m = (Pm + R1m) / 2
+
+// Support Mid Levels
+SP1m = (Pm + S1m) / 2
+S12m = (S1m + S2m) / 2
+S23m = (S2m + S3m) / 2
+
+
+//Plot Historical CPR
+plot(hide_neg(R3m), title='R3', color=R3m != R3m[1] ? na : rColor, linewidth=CPRlinewidth)
+plot(hide_neg(R2m), title='R2', color=R2m != R2m[1] ? na : rColor, linewidth=CPRlinewidth)
+plot(hide_neg(R1m), title='R1', color=R1m != R1m[1] ? na : rColor, linewidth=CPRlinewidth)
+
+p_cprTCm = plot(hide_neg(TCm < BCm?BCm:TCm), title='TC', color=TCm != TCm[1] ? na : cprColor, linewidth=CPRlinewidth)
+p_cprPm  = plot(hide_neg(Pm) , title='P' , color=Pm  != Pm[1]  ? na : cprColor, linewidth=CPRlinewidth)
+p_cprBCm = plot(hide_neg(TCm < BCm?TCm:BCm), title='BC', color=BCm != BCm[1] ? na : cprColor, linewidth=CPRlinewidth)
+
+plot(hide_neg(S1m), title='S1', color=S1m != S1m[1] ? na : sColor, linewidth=CPRlinewidth)
+plot(hide_neg(S2m), title='S2', color=S2m != S2m[1] ? na : sColor, linewidth=CPRlinewidth)
+plot(hide_neg(S3m), title='S3', color=S3m != S3m[1] ? na : sColor, linewidth=CPRlinewidth)
+
+fill(p_cprTCm, p_cprBCm, color=color.new(cprColor, S3m != S3m[1]?100:fTransp))
+
+
+//mid lines
+plot(sMidLines?hide_neg(R23m):na, title='(R2+R3)/2', color=R23m != R23m[1] ? na : rColorM, linewidth=Midlinewidth)
+plot(sMidLines?hide_neg(R12m):na, title='(R1+R2)/2', color=R12m != R12m[1] ? na : rColorM, linewidth=Midlinewidth)
+plot(sMidLines?hide_neg(RP1m):na, title='(P+R1)/2' , color=RP1m != RP1m[1] ? na : rColorM, linewidth=Midlinewidth)
+
+plot(sMidLines?hide_neg(SP1m):na, title='(P+S1)/2' , color=SP1m != SP1m[1] ? na : sColorM, linewidth=Midlinewidth)
+plot(sMidLines?hide_neg(S12m):na, title='(S1+S2)/2', color=S12m != S12m[1] ? na : sColorM, linewidth=Midlinewidth)
+plot(sMidLines?hide_neg(S23m):na, title='(S2+S3)/2', color=S23m != S23m[1] ? na : sColorM, linewidth=Midlinewidth)
+
+
+
+//Complete current cycle
+//CPR
+_t_r3a = line.new(time, hide_neg(R3m), tom_start, hide_neg(R3m), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r3a[1])
+_t_r2a = line.new(time, hide_neg(R2m), tom_start, hide_neg(R2m), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r2a[1])
+_t_r1a = line.new(time, hide_neg(R1m), tom_start, hide_neg(R1m), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r1a[1])
+
+_t_tca = line.new(time, hide_neg(TCm < BCm?BCm:TCm), tom_start, hide_neg(TCm < BCm?BCm:TCm), xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_tca[1])
+_t_pa = line.new(time,  hide_neg(Pm), tom_start,  hide_neg(Pm),  xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_pa[1])
+_t_bca = line.new(time, hide_neg(TCm < BCm?TCm:BCm), tom_start, hide_neg(TCm < BCm?TCm:BCm), xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_bca[1])
+
+_t_s1a = line.new(time, hide_neg(S1m), tom_start, hide_neg(S1m), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s1a[1])
+_t_s2a = line.new(time, hide_neg(S2m), tom_start, hide_neg(S2m), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s2a[1])
+_t_s3a = line.new(time, hide_neg(S3m), tom_start, hide_neg(S3m), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s3a[1])
+
+blue_box = box.new(time, hide_neg(TCm), tom_start, hide_neg(BCm), xloc=xloc.bar_time, border_width=0, bgcolor=color.new(cprColor,fTransp))
+box.delete(blue_box[1])
+
+
+//mid lines
+if(sMidLines)
+    _t_r23a = line.new(time, hide_neg(R23m), tom_start, hide_neg(R23m), xloc.bar_time, color=rColorM, width=Midlinewidth)
+    line.delete(_t_r23a[1])
+    _t_r12a = line.new(time, hide_neg(R12m), tom_start, hide_neg(R12m), xloc.bar_time, color=rColorM, width=Midlinewidth)
+    line.delete(_t_r12a[1])
+    _t_rP1a = line.new(time, hide_neg(RP1m), tom_start, hide_neg(RP1m), xloc.bar_time, color=rColorM, width=Midlinewidth)
+    line.delete(_t_rP1a[1])
+
+    _t_sP1a = line.new(time, hide_neg(SP1m), tom_start, hide_neg(SP1m), xloc.bar_time, color=sColorM, width=Midlinewidth)
+    line.delete(_t_sP1a[1])
+    _t_s12a = line.new(time, hide_neg(S12m), tom_start, hide_neg(S12m), xloc.bar_time, color=sColorM, width=Midlinewidth)
+    line.delete(_t_s12a[1])
+    _t_s23a = line.new(time, hide_neg(S23m), tom_start, hide_neg(S23m), xloc.bar_time, color=sColorM, width=Midlinewidth)
+    line.delete(_t_s23a[1])
+
+
+//High & Low
+if showPDHL
+    _pdh = line.new(tom_start - (tom_end - tom_start), hide_neg(Hm), tom_start, hide_neg(Hm), xloc.bar_time, color=rColor, style=line.style_dotted, width=CPRlinewidth)
+    line.delete(_pdh[1])
+    _pdl = line.new(tom_start - (tom_end - tom_start), hide_neg(Lm), tom_start, hide_neg(Lm), xloc.bar_time, color=sColor, style=line.style_dotted, width=CPRlinewidth)
+    line.delete(_pdl[1])
+
+
+//Label func()
+fib_label(x_, y_, text_, textcolor_) =>
+    if(str.length(tostring(round(y_))) >= 2)
+        factor = pow(10, 2)
+        numberR = int(y_ * factor) / factor
+        label.new(x_, y_, text=text_+" ("+tostring(numberR)+")", xloc=xloc.bar_time, textcolor=textcolor_, color=color.new(color.black,100), style=label.style_label_lower_right)
+    else
+        label.new(x_, y_, text=text_+" ("+tostring(y_)+")", xloc=xloc.bar_time, textcolor=textcolor_, color=color.new(color.black,100), style=label.style_label_lower_right)
+
+if(sLabels)
+    lu3l = fib_label(tom_start, hide_neg(R3m), "R3", rColor)
+    label.delete(lu3l[1])
+    lu2l = fib_label(tom_start, hide_neg(R2m), "R2", rColor)
+    label.delete(lu2l[1])
+    lu1l = fib_label(tom_start, hide_neg(R1m), "R1", rColor)
+    label.delete(lu1l[1])
+    
+    lu1Rl = fib_label(tom_start, hide_neg(TCm < BCm?BCm:TCm), "TC", cprColor)
+    label.delete(lu1Rl[1])
+    l00l  = fib_label(tom_start, hide_neg(Pm), "P"  , cprColor)
+    label.delete(l00l[1])
+    ld1Rl = fib_label(tom_start, hide_neg(TCm < BCm?TCm:BCm), "BC", cprColor)
+    label.delete(ld1Rl[1])
+    
+    ld1l = fib_label(tom_start, hide_neg(S1m), "S1", sColor)
+    label.delete(ld1l[1])
+    ld2l = fib_label(tom_start, hide_neg(S2m), "S2", sColor)
+    label.delete(ld2l[1])
+    ld3l = fib_label(tom_start, hide_neg(S3m), "S3", sColor)
+    label.delete(ld3l[1])
+    
+    if showPDHL
+        l_pdh = fib_label(tom_start, hide_neg(Hm), "P High", rColor)
+        label.delete(l_pdh[1])
+        l_pdl = fib_label(tom_start, hide_neg(Lm), "P Low", sColor)
+        label.delete(l_pdl[1])
+
+
+/////////////////////////////////////////
+//      Calculate Tomorrow's CPR       //
+/////////////////////////////////////////
+tH = security(syminfo.tickerid, cpr_timeframe, high,barmerge.gaps_off, barmerge.lookahead_on)
+tC = security(syminfo.tickerid, cpr_timeframe, close,barmerge.gaps_off, barmerge.lookahead_on)
+tL = security(syminfo.tickerid, cpr_timeframe, low,barmerge.gaps_off, barmerge.lookahead_on)
+
+// Pivot Range
+tP = (tH + tL + tC) / 3 
+tBC = (tH + tL)/2
+tTC = (tP - tBC) + tP
+
+if(tTC < tBC)
+    tTC = (tH + tL)/2
+    tBC = (tP - tTC) + tP
+
+// Resistance Levels
+tR3 = tH + 2*(tP - tL)
+tR2 = tP + (tH - tL)
+tR1 = (tP * 2) - tL
+
+// Support Levels
+tS1 = (tP * 2) - tH
+tS2 = tP - (tH - tL)
+tS3 = tL - 2*(tH - tP)
+
+// Plot Tomorrow's CPR
+_t_r3 = line.new(tom_start, hide_neg(tR3), tom_end, hide_neg(tR3), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r3[1])
+_t_r2 = line.new(tom_start, hide_neg(tR2), tom_end, hide_neg(tR2), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r2[1])
+_t_r1 = line.new(tom_start, hide_neg(tR1), tom_end, hide_neg(tR1), xloc.bar_time, color=rColor, width=CPRlinewidth)
+line.delete(_t_r1[1])
+
+_t_tc = line.new(tom_start, hide_neg(tTC < tBC?tBC:tTC), tom_end, hide_neg(tTC < tBC?tBC:tTC), xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_tc[1])
+_t_p = line.new(tom_start,  hide_neg(tP),  tom_end, hide_neg(tP),  xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_p[1])
+_t_bc = line.new(tom_start, hide_neg(tTC < tBC?tTC:tBC), tom_end, hide_neg(tTC < tBC?tTC:tBC), xloc.bar_time, color=cprColor, width=CPRlinewidth)
+line.delete(_t_bc[1])
+
+_t_s1 = line.new(tom_start, hide_neg(tS1), tom_end, hide_neg(tS1), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s1[1])
+_t_s2 = line.new(tom_start, hide_neg(tS2), tom_end, hide_neg(tS2), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s2[1])
+_t_s3 = line.new(tom_start, hide_neg(tS3), tom_end, hide_neg(tS3), xloc.bar_time, color=sColor, width=CPRlinewidth)
+line.delete(_t_s3[1])
+
+tblue_box = box.new(tom_start, hide_neg(tTC), tom_end, hide_neg(tTC), xloc=xloc.bar_time, border_width=0, bgcolor=color.new(cprColor,fTransp))
+box.delete(tblue_box[1])
+
+
+if showPDHL
+    _pdh = line.new(tom_start, hide_neg(tH), tom_end, hide_neg(tH), xloc.bar_time, color=rColor, style=line.style_dotted, width=CPRlinewidth)
+    line.delete(_pdh[1])
+    _pdl = line.new(tom_start, hide_neg(tL), tom_end, hide_neg(tL), xloc.bar_time, color=sColor, style=line.style_dotted, width=CPRlinewidth)
+    line.delete(_pdl[1])
+
+
+//Labels
+if(sLabels)
+    l_t_r3 = label.new(tom_start, hide_neg(tR3), text="R3", xloc=xloc.bar_time, textcolor=rColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_r3[1])
+    l_t_r2 = label.new(tom_start, hide_neg(tR2), text="R2", xloc=xloc.bar_time, textcolor=rColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_r2[1])
+    l_t_r1 = label.new(tom_start, hide_neg(tR1), text="R1", xloc=xloc.bar_time, textcolor=rColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_r1[1])
+    
+    l_t_tc = label.new(tom_start, hide_neg(tTC < tBC?tBC:tTC), text="TC", xloc=xloc.bar_time, textcolor=cprColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_tc[1])
+    l_t_p = label.new(tom_start,  hide_neg(tP),  text="P",  xloc=xloc.bar_time, textcolor=cprColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_p[1])
+    l_t_bc = label.new(tom_start, hide_neg(tTC < tBC?tTC:tBC), text="BC", xloc=xloc.bar_time, textcolor=cprColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_bc[1])
+    
+    l_t_s1 = label.new(tom_start, hide_neg(tS1), text="S1", xloc=xloc.bar_time, textcolor=sColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_s1[1])
+    l_t_s2 = label.new(tom_start, hide_neg(tS2), text="S2", xloc=xloc.bar_time, textcolor=sColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_s2[1])
+    l_t_s3 = label.new(tom_start, hide_neg(tS3), text="S3", xloc=xloc.bar_time, textcolor=sColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+    label.delete(l_t_s3[1])
+    
+    if showPDHL
+        l_pdh = label.new(tom_start, hide_neg(tH), text="P High", xloc=xloc.bar_time, textcolor=rColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+        label.delete(l_pdh[1])
+        l_pdl = label.new(tom_start, hide_neg(tL), text="P Low", xloc=xloc.bar_time, textcolor=sColor, color=color.new(color.black,100), style=label.style_label_lower_left)
+        label.delete(l_pdl[1])
